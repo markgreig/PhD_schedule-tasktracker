@@ -1119,6 +1119,20 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+
+        .calendar-event:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .calendar-event[draggable="true"] {
+            user-select: none;
+        }
+
+        .calendar-drop-zone {
+            transition: background-color 0.2s, border-color 0.2s;
         }
 
         .calendar-event.task {
@@ -2534,14 +2548,24 @@
                 if (!isCurrentMonth) dayClass += ' other-month';
                 if (isToday) dayClass += ' today';
 
-                html += `<div class="${dayClass}">`;
+                html += `<div class="${dayClass} calendar-drop-zone" data-date="${dateStr}"
+                         ondragover="handleCalendarDragOver(event)"
+                         ondrop="handleCalendarDrop(event)"
+                         ondragleave="handleCalendarDragLeave(event)">`;
                 html += `<div class="calendar-day-number">${currentDate.getDate()}</div>`;
 
                 if (dayEvents.length > 0) {
                     html += '<div class="calendar-day-events">';
                     const maxShow = 3;
                     dayEvents.slice(0, maxShow).forEach(event => {
-                        html += `<div class="calendar-event ${event.type}">${escapeHtml(event.title)}</div>`;
+                        html += `<div class="calendar-event ${event.type}"
+                                     draggable="true"
+                                     data-event-type="${event.type}"
+                                     data-event-id="${event.id || ''}"
+                                     data-event-title="${escapeHtml(event.title)}"
+                                     ondragstart="handleCalendarEventDragStart(event)"
+                                     ondragend="handleCalendarEventDragEnd(event)"
+                                     style="cursor: move;">${escapeHtml(event.title)}</div>`;
                     });
                     if (dayEvents.length > maxShow) {
                         html += `<div class="calendar-event-more">+${dayEvents.length - maxShow} more</div>`;
@@ -2688,6 +2712,7 @@
             appState.tasks.forEach(task => {
                 if (task.deadline && task.deadline.startsWith(dateStr)) {
                     events.push({
+                        id: task.id,
                         type: 'task',
                         typeLabel: 'Task',
                         title: task.title,
@@ -2700,6 +2725,7 @@
             appState.meetings.forEach(meeting => {
                 if (meeting.date && meeting.date.startsWith(dateStr)) {
                     events.push({
+                        id: meeting.id,
                         type: 'meeting',
                         typeLabel: 'Meeting',
                         title: meeting.title,
@@ -2712,6 +2738,7 @@
             appState.calendarEvents.forEach(event => {
                 if (event.date && event.date.startsWith(dateStr)) {
                     events.push({
+                        id: event.id,
                         type: 'event',
                         typeLabel: 'Event',
                         title: event.title,
@@ -2724,6 +2751,111 @@
             events.sort((a, b) => new Date(a.date) - new Date(b.date));
 
             return events;
+        }
+
+        // ===================================
+        // CALENDAR DRAG AND DROP
+        // ===================================
+        let draggedCalendarEvent = null;
+
+        function handleCalendarEventDragStart(e) {
+            const eventType = e.target.dataset.eventType;
+            const eventId = e.target.dataset.eventId;
+            const eventTitle = e.target.dataset.eventTitle;
+
+            draggedCalendarEvent = {
+                type: eventType,
+                id: eventId,
+                title: eventTitle
+            };
+
+            e.target.style.opacity = '0.5';
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', e.target.innerHTML);
+        }
+
+        function handleCalendarEventDragEnd(e) {
+            e.target.style.opacity = '1';
+        }
+
+        function handleCalendarDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            // Add visual feedback
+            const dropZone = e.currentTarget;
+            if (dropZone.classList.contains('calendar-drop-zone')) {
+                dropZone.style.backgroundColor = 'var(--bg-primary)';
+                dropZone.style.borderColor = 'var(--primary)';
+            }
+        }
+
+        function handleCalendarDragLeave(e) {
+            // Remove visual feedback
+            const dropZone = e.currentTarget;
+            if (dropZone.classList.contains('calendar-drop-zone')) {
+                dropZone.style.backgroundColor = '';
+                dropZone.style.borderColor = '';
+            }
+        }
+
+        function handleCalendarDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Remove visual feedback
+            const dropZone = e.currentTarget;
+            dropZone.style.backgroundColor = '';
+            dropZone.style.borderColor = '';
+
+            if (!draggedCalendarEvent) return;
+
+            const newDate = dropZone.dataset.date;
+            if (!newDate) return;
+
+            const { type, id, title } = draggedCalendarEvent;
+
+            // Update the item based on type
+            if (type === 'task') {
+                const task = appState.tasks.find(t => t.id === id);
+                if (task) {
+                    task.deadline = newDate;
+                    saveState();
+                    renderCalendar();
+                    renderKanban(); // Update tasks view if visible
+                    showToast(`Task "${title}" moved to ${formatDate(newDate)}`, 'success');
+                }
+            } else if (type === 'meeting') {
+                const meeting = appState.meetings.find(m => m.id === id);
+                if (meeting) {
+                    // Preserve time if it exists
+                    const oldDate = new Date(meeting.date);
+                    const hasTime = meeting.date.includes('T');
+
+                    if (hasTime) {
+                        // Keep the same time, just change the date
+                        const timePart = meeting.date.split('T')[1];
+                        meeting.date = newDate + 'T' + timePart;
+                    } else {
+                        meeting.date = newDate;
+                    }
+
+                    saveState();
+                    renderCalendar();
+                    renderMeetings(); // Update meetings view if visible
+                    showToast(`Meeting "${title}" moved to ${formatDate(newDate)}`, 'success');
+                }
+            } else if (type === 'event') {
+                const event = appState.calendarEvents.find(e => e.id === id);
+                if (event) {
+                    event.date = newDate;
+                    saveState();
+                    renderCalendar();
+                    showToast(`Event "${title}" moved to ${formatDate(newDate)}`, 'success');
+                }
+            }
+
+            draggedCalendarEvent = null;
         }
 
         // ===================================
