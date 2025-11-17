@@ -1404,6 +1404,12 @@
                     <span class="icon">⏱️</span>
                 </button>
 
+                <!-- Backup Indicator -->
+                <button id="backupIndicator" class="icon-btn" title="Click to backup your data" onclick="backupData()">
+                    <span class="icon">💾</span>
+                    <span id="backupStatusText" style="font-size: 10px; position: absolute; bottom: 2px; right: 2px; background: var(--critical); color: white; padding: 1px 3px; border-radius: 3px; display: none;">!</span>
+                </button>
+
                 <!-- Dark Mode Toggle -->
                 <button id="themeToggle" class="icon-btn" title="Toggle Dark Mode">
                     <span class="icon">🌙</span>
@@ -1662,6 +1668,9 @@
             </button>
         </div>
 
+        <!-- Hidden file input for restore -->
+        <input type="file" id="restoreFileInput" accept=".json" style="display: none;">
+
     </div>
 
     <script>
@@ -1689,6 +1698,7 @@
             theme: 'light',
             currentTab: 'dashboard',
             highlightItem: null, // { type: 'task|project|meeting|paper|writing', id: 'xxx' }
+            lastBackupTime: null, // Track when user last backed up data
             pomodoro: {
                 duration: 25 * 60,
                 timeRemaining: 25 * 60,
@@ -4764,6 +4774,13 @@
             document.getElementById('restoreDataBtn').addEventListener('click', () => {
                 document.getElementById('restoreFileInput')?.click();
             });
+            document.getElementById('restoreFileInput').addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    restoreData(file);
+                    e.target.value = ''; // Reset file input
+                }
+            });
             document.getElementById('exportDataBtn').addEventListener('click', exportToJSON);
             document.getElementById('exportCSVBtn').addEventListener('click', exportToCSV);
             document.getElementById('clearDataBtn').addEventListener('click', clearAllData);
@@ -5109,10 +5126,92 @@
         }
 
         // ===================================
+        // BACKUP REMINDER SYSTEM
+        // ===================================
+        function updateBackupIndicator() {
+            const indicator = document.getElementById('backupIndicator');
+            const statusBadge = document.getElementById('backupStatusText');
+
+            if (!appState.lastBackupTime) {
+                // Never backed up
+                indicator.title = '⚠️ No backup yet! Click to backup your data';
+                indicator.style.color = 'var(--critical)';
+                statusBadge.style.display = 'block';
+                statusBadge.textContent = '!';
+                statusBadge.style.background = 'var(--critical)';
+                return;
+            }
+
+            const lastBackup = new Date(appState.lastBackupTime);
+            const now = new Date();
+            const daysSinceBackup = Math.floor((now - lastBackup) / (1000 * 60 * 60 * 24));
+
+            if (daysSinceBackup === 0) {
+                // Backed up today
+                indicator.title = `✅ Last backup: Today. Click to backup again`;
+                indicator.style.color = 'var(--success)';
+                statusBadge.style.display = 'none';
+            } else if (daysSinceBackup < 7) {
+                // Less than a week
+                indicator.title = `Last backup: ${daysSinceBackup} day${daysSinceBackup > 1 ? 's' : ''} ago. Click to backup`;
+                indicator.style.color = 'var(--text-secondary)';
+                statusBadge.style.display = 'none';
+            } else if (daysSinceBackup < 14) {
+                // 1-2 weeks - warning
+                indicator.title = `⚠️ Last backup: ${daysSinceBackup} days ago. Click to backup NOW`;
+                indicator.style.color = 'var(--warning)';
+                statusBadge.style.display = 'block';
+                statusBadge.textContent = daysSinceBackup;
+                statusBadge.style.background = 'var(--warning)';
+            } else {
+                // Over 2 weeks - critical
+                indicator.title = `🚨 CRITICAL: Last backup ${daysSinceBackup} days ago! Click to backup NOW`;
+                indicator.style.color = 'var(--critical)';
+                statusBadge.style.display = 'block';
+                statusBadge.textContent = daysSinceBackup;
+                statusBadge.style.background = 'var(--critical)';
+            }
+        }
+
+        function checkBackupReminder() {
+            if (!appState.lastBackupTime) {
+                // Never backed up - show warning after 1 minute
+                setTimeout(() => {
+                    showToast('⚠️ Important: You haven\'t backed up your data yet! Click the 💾 icon in the header to backup.', 'warning');
+                }, 60000); // 1 minute
+                return;
+            }
+
+            const lastBackup = new Date(appState.lastBackupTime);
+            const now = new Date();
+            const daysSinceBackup = Math.floor((now - lastBackup) / (1000 * 60 * 60 * 24));
+
+            if (daysSinceBackup >= 7) {
+                // Show reminder if been more than a week
+                setTimeout(() => {
+                    const message = daysSinceBackup >= 14
+                        ? `🚨 CRITICAL: Your last backup was ${daysSinceBackup} days ago! Please backup NOW to avoid data loss.`
+                        : `⚠️ Reminder: Your last backup was ${daysSinceBackup} days ago. Click the 💾 icon to backup your data.`;
+
+                    showToast(message, daysSinceBackup >= 14 ? 'error' : 'warning');
+                }, 5000); // 5 seconds after app loads
+            }
+
+            // Check again every hour
+            setInterval(() => {
+                updateBackupIndicator();
+            }, 3600000); // 1 hour
+        }
+
+        // ===================================
         // DATA EXPORT/IMPORT
         // (Full implementation in Part 14)
         // ===================================
         function backupData() {
+            // Update last backup time
+            appState.lastBackupTime = new Date().toISOString();
+            saveState();
+
             const dataStr = JSON.stringify(appState, null, 2);
             const dataBlob = new Blob([dataStr], { type: 'application/json' });
             const url = URL.createObjectURL(dataBlob);
@@ -5121,7 +5220,51 @@
             link.download = `phd-research-backup-${new Date().toISOString().split('T')[0]}.json`;
             link.click();
             URL.revokeObjectURL(url);
-            showToast('Backup downloaded successfully', 'success');
+
+            updateBackupIndicator();
+            showToast('✅ Backup downloaded successfully! Keep this file safe.', 'success');
+        }
+
+        function restoreData(file) {
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const restored = JSON.parse(e.target.result);
+
+                    // Validate the backup has the expected structure
+                    if (!restored.tasks || !Array.isArray(restored.tasks)) {
+                        showToast('Invalid backup file format', 'error');
+                        return;
+                    }
+
+                    // Confirm before restoring
+                    if (confirm('⚠️ This will replace ALL current data with the backup. Are you absolutely sure?\n\nCurrent data will be lost if you haven\'t backed it up!')) {
+                        // Merge the restored data into appState
+                        Object.assign(appState, restored);
+
+                        // Save to localStorage
+                        saveState();
+
+                        showToast('✅ Data restored successfully! Refreshing...', 'success');
+
+                        // Reload the page to ensure everything is in sync
+                        setTimeout(() => {
+                            location.reload();
+                        }, 1500);
+                    }
+                } catch (error) {
+                    console.error('Error restoring backup:', error);
+                    showToast('❌ Error reading backup file. File may be corrupted.', 'error');
+                }
+            };
+
+            reader.onerror = () => {
+                showToast('❌ Error reading file', 'error');
+            };
+
+            reader.readAsText(file);
         }
 
         function exportToJSON() {
@@ -5348,6 +5491,10 @@
 
             // Render initial tab - use switchTab to ensure proper initialization
             switchTab('dashboard');
+
+            // Initialize backup indicator and reminders
+            updateBackupIndicator();
+            checkBackupReminder();
 
             console.log('App initialized successfully!');
             if (!hasData) {
