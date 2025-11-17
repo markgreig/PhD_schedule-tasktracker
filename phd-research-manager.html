@@ -2409,7 +2409,7 @@
                     const daysUntil = getDaysUntil(task.deadline);
                     const daysText = daysUntil === 0 ? 'Today' : daysUntil === 1 ? 'Tomorrow' : `In ${daysUntil} days`;
                     html += `
-                        <div class="upcoming-item">
+                        <div class="upcoming-item" onclick="showTaskDetails('${task.id}', event)" style="cursor: pointer;">
                             <div class="upcoming-item-title">${escapeHtml(task.title)}</div>
                             <div class="upcoming-item-meta">
                                 <span class="tag ${urgencyClass}">${daysText}</span>
@@ -2461,7 +2461,7 @@
                 appState.projects.slice(0, 5).forEach(project => {
                     const progress = project.progress || 0;
                     html += `
-                        <div class="upcoming-item">
+                        <div class="upcoming-item" onclick="showProjectDetails('${project.id}')" style="cursor: pointer;">
                             <div class="upcoming-item-title">${escapeHtml(project.name)}</div>
                             <div class="upcoming-item-meta">
                                 <div class="progress-bar" style="margin-top: 4px;">
@@ -3053,6 +3053,81 @@
                         <button type="button" class="btn btn-outline" onclick="closeModal(this.closest('.modal'))">Close</button>
                         <button type="button" class="btn btn-outline" onclick="closeModal(this.closest('.modal')); sendMeetingInvite('${meetingId}')">📧 Send Invite</button>
                         <button type="button" class="btn btn-primary" onclick="closeModal(this.closest('.modal')); editMeeting('${meetingId}')">Edit Meeting</button>
+                    </div>
+                </div>
+            `;
+
+            showModal(modalContent);
+        }
+
+        function showProjectDetails(projectId) {
+            const project = appState.projects.find(p => p.id === projectId);
+            if (!project) return;
+
+            const modalContent = `
+                <div class="modal-content modal-lg">
+                    <div class="modal-header">
+                        <h3>Project Details</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <h2>${escapeHtml(project.name)}</h2>
+
+                        ${project.description ? `
+                            <div style="margin-bottom: 16px;">
+                                <strong>Description:</strong>
+                                <div style="margin-top: 4px;">${escapeHtml(project.description)}</div>
+                            </div>
+                        ` : ''}
+
+                        <div style="margin-bottom: 16px;">
+                            <strong>Progress:</strong>
+                            <div class="progress-bar" style="margin-top: 8px;">
+                                <div class="progress-fill" style="width: ${project.progress || 0}%"></div>
+                            </div>
+                            <div style="margin-top: 4px;">${project.progress || 0}% Complete</div>
+                        </div>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                            <div>
+                                <strong>Ethics Status:</strong>
+                                <div style="margin-top: 4px;">
+                                    <span class="tag tag-${project.ethicsStatus === 'approved' ? 'success' : project.ethicsStatus === 'pending' ? 'warning' : 'critical'}">
+                                        ${project.ethicsStatus ? project.ethicsStatus.toUpperCase().replace('-', ' ') : 'PENDING'}
+                                    </span>
+                                </div>
+                            </div>
+                            ${project.ethicsExpiryDate ? `
+                                <div>
+                                    <strong>Ethics Expiry:</strong>
+                                    <div style="margin-top: 4px;">${formatDate(project.ethicsExpiryDate)}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        ${project.protocolVersion ? `
+                            <div style="margin-bottom: 16px;">
+                                <strong>Protocol Version:</strong> ${escapeHtml(project.protocolVersion)}
+                            </div>
+                        ` : ''}
+
+                        ${project.recruitmentTarget ? `
+                            <div style="margin-bottom: 16px;">
+                                <strong>Recruitment:</strong>
+                                <div style="margin-top: 4px;">${project.recruitmentCurrent || 0} / ${project.recruitmentTarget} participants</div>
+                                <div class="progress-bar" style="margin-top: 8px;">
+                                    <div class="progress-fill" style="width: ${Math.min(100, ((project.recruitmentCurrent || 0) / project.recruitmentTarget) * 100)}%"></div>
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <div style="font-size: 11px; color: var(--text-secondary); padding-top: 8px; border-top: 1px solid var(--border);">
+                            Created: ${formatDateTime(project.createdAt)}
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal(this.closest('.modal'))">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="closeModal(this.closest('.modal')); editProject('${projectId}')">Edit Project</button>
                     </div>
                 </div>
             `;
@@ -5149,8 +5224,8 @@
                 loadSampleData();
             }
 
-            // Render initial tab
-            renderActiveTab();
+            // Render initial tab - use switchTab to ensure proper initialization
+            switchTab('dashboard');
 
             console.log('App initialized successfully!');
             if (!hasData) {
