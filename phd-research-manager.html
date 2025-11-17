@@ -1999,7 +1999,7 @@
             }
 
             return `
-                <div class="task-card" draggable="true" data-task-id="${task.id}">
+                <div class="task-card" draggable="true" data-task-id="${task.id}" onclick="showTaskDetails('${task.id}', event)" style="cursor: pointer;">
                     <div class="task-card-header">
                         <div class="task-title">${escapeHtml(task.title)}</div>
                         <span class="task-priority tag tag-${task.priority}">${task.priority.toUpperCase()}</span>
@@ -2021,8 +2021,8 @@
                             ${task.deadline ? `<span class="tag ${urgencyClass}">${deadlineText}</span>` : '<span class="tag tag-neutral">No deadline</span>'}
                         </div>
                         <div class="task-actions">
-                            <button class="task-action-btn" onclick="editTask('${task.id}')" title="Edit">✏️</button>
-                            <button class="task-action-btn" onclick="confirmDeleteTask('${task.id}')" title="Delete">🗑️</button>
+                            <button class="task-action-btn" onclick="event.stopPropagation(); editTask('${task.id}')" title="Edit">✏️</button>
+                            <button class="task-action-btn" onclick="event.stopPropagation(); confirmDeleteTask('${task.id}')" title="Delete">🗑️</button>
                         </div>
                     </div>
                 </div>
@@ -2199,6 +2199,93 @@
 
         function editTask(taskId) {
             showTaskModal(taskId);
+        }
+
+        function showTaskDetails(taskId, event) {
+            // Prevent drag from triggering
+            if (event && event.target.closest('.task-actions')) {
+                return;
+            }
+
+            const task = appState.tasks.find(t => t.id === taskId);
+            if (!task) return;
+
+            const project = task.projectId ? appState.projects.find(p => p.id === task.projectId) : null;
+            const urgencyClass = getUrgencyClass(task.deadline);
+
+            const modalContent = `
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Task Details</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div>
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                                    <h2 style="margin: 0; font-size: 20px;">${escapeHtml(task.title)}</h2>
+                                    <span class="tag tag-${task.priority}">${task.priority.toUpperCase()}</span>
+                                </div>
+                                <div style="font-size: 13px; color: var(--text-secondary);">
+                                    Status: <strong>${KANBAN_COLUMNS.find(c => c.id === task.status)?.title || task.status}</strong>
+                                </div>
+                            </div>
+
+                            ${task.description ? `
+                                <div>
+                                    <strong style="font-size: 13px; display: block; margin-bottom: 4px;">Description</strong>
+                                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: var(--radius); white-space: pre-wrap;">${escapeHtml(task.description)}</div>
+                                </div>
+                            ` : ''}
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                ${task.deadline ? `
+                                    <div>
+                                        <strong style="font-size: 13px; display: block; margin-bottom: 4px;">Deadline</strong>
+                                        <div style="display: flex; align-items: center; gap: 8px;">
+                                            <span>${formatDate(task.deadline)}</span>
+                                            <span class="tag ${urgencyClass}">●</span>
+                                        </div>
+                                    </div>
+                                ` : '<div></div>'}
+
+                                ${task.estimatedTime ? `
+                                    <div>
+                                        <strong style="font-size: 13px; display: block; margin-bottom: 4px;">Estimated Time</strong>
+                                        <div>⏱️ ${task.estimatedTime} hours</div>
+                                    </div>
+                                ` : '<div></div>'}
+                            </div>
+
+                            ${project ? `
+                                <div>
+                                    <strong style="font-size: 13px; display: block; margin-bottom: 4px;">Project</strong>
+                                    <div>🔬 ${escapeHtml(project.name)}</div>
+                                </div>
+                            ` : ''}
+
+                            ${task.tags.length > 0 ? `
+                                <div>
+                                    <strong style="font-size: 13px; display: block; margin-bottom: 8px;">Tags</strong>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                                        ${task.tags.map(tag => `<span class="task-tag">${escapeHtml(tag)}</span>`).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <div style="font-size: 11px; color: var(--text-secondary); padding-top: 8px; border-top: 1px solid var(--border);">
+                                Created: ${formatDateTime(task.createdAt)}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal(this.closest('.modal'))">Close</button>
+                        <button type="button" class="btn btn-primary" onclick="closeModal(this.closest('.modal')); editTask('${taskId}')">Edit Task</button>
+                    </div>
+                </div>
+            `;
+
+            showModal(modalContent);
         }
 
         function confirmDeleteTask(taskId) {
@@ -2566,7 +2653,8 @@
                                      data-event-title="${escapeHtml(event.title)}"
                                      ondragstart="handleCalendarEventDragStart(event)"
                                      ondragend="handleCalendarEventDragEnd(event)"
-                                     style="cursor: move;">${escapeHtml(event.title)}</div>`;
+                                     onclick="showEventDetails('${event.type}', '${event.id}', event)"
+                                     style="cursor: pointer;">${escapeHtml(event.title)}</div>`;
                     });
                     if (dayEvents.length > maxShow) {
                         html += `<div class="calendar-event-more">+${dayEvents.length - maxShow} more</div>`;
@@ -2857,6 +2945,103 @@
             }
 
             draggedCalendarEvent = null;
+        }
+
+        function showEventDetails(eventType, eventId, event) {
+            // Prevent drag from triggering if event is provided
+            if (event) {
+                event.stopPropagation();
+            }
+
+            if (eventType === 'task') {
+                showTaskDetails(eventId);
+            } else if (eventType === 'meeting') {
+                showMeetingDetails(eventId);
+            } else if (eventType === 'event') {
+                // For calendar events (if we add them later)
+                showToast('Calendar event details coming soon', 'info');
+            }
+        }
+
+        function showMeetingDetails(meetingId) {
+            const meeting = appState.meetings.find(m => m.id === meetingId);
+            if (!meeting) return;
+
+            const isPast = meeting.date && new Date(meeting.date) < new Date();
+
+            const modalContent = `
+                <div class="modal-content modal-lg">
+                    <div class="modal-header">
+                        <h3>Meeting Details</h3>
+                        <button class="modal-close">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div>
+                                <h2 style="margin: 0 0 8px 0; font-size: 20px;">${escapeHtml(meeting.title)}</h2>
+                                ${meeting.date ? `
+                                    <div style="font-size: 14px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px;">
+                                        📅 ${formatDateTime(meeting.date)}
+                                        ${isPast ? '<span class="tag tag-neutral">Past</span>' : '<span class="tag tag-success">Upcoming</span>'}
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            ${meeting.attendees ? `
+                                <div>
+                                    <strong style="font-size: 13px; display: block; margin-bottom: 4px;">👥 Attendees</strong>
+                                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: var(--radius);">${escapeHtml(meeting.attendees)}</div>
+                                </div>
+                            ` : ''}
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                ${meeting.location ? `
+                                    <div>
+                                        <strong style="font-size: 13px; display: block; margin-bottom: 4px;">📍 Location</strong>
+                                        <div>${escapeHtml(meeting.location)}</div>
+                                    </div>
+                                ` : '<div></div>'}
+
+                                ${meeting.teamsUrl ? `
+                                    <div>
+                                        <strong style="font-size: 13px; display: block; margin-bottom: 4px;">💻 Online Meeting</strong>
+                                        <div>
+                                            <a href="${escapeHtml(meeting.teamsUrl)}" target="_blank" style="color: var(--primary); text-decoration: none;">
+                                                Join Meeting ↗
+                                            </a>
+                                        </div>
+                                    </div>
+                                ` : '<div></div>'}
+                            </div>
+
+                            ${meeting.agenda ? `
+                                <div>
+                                    <strong style="font-size: 13px; display: block; margin-bottom: 4px;">📋 Agenda</strong>
+                                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: var(--radius); white-space: pre-wrap;">${escapeHtml(meeting.agenda)}</div>
+                                </div>
+                            ` : ''}
+
+                            ${meeting.notes ? `
+                                <div>
+                                    <strong style="font-size: 13px; display: block; margin-bottom: 4px;">📝 Notes</strong>
+                                    <div style="padding: 12px; background: var(--bg-secondary); border-radius: var(--radius); white-space: pre-wrap;">${escapeHtml(meeting.notes)}</div>
+                                </div>
+                            ` : ''}
+
+                            <div style="font-size: 11px; color: var(--text-secondary); padding-top: 8px; border-top: 1px solid var(--border);">
+                                Created: ${formatDateTime(meeting.createdAt)}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-outline" onclick="closeModal(this.closest('.modal'))">Close</button>
+                        <button type="button" class="btn btn-outline" onclick="closeModal(this.closest('.modal')); sendMeetingInvite('${meetingId}')">📧 Send Invite</button>
+                        <button type="button" class="btn btn-primary" onclick="closeModal(this.closest('.modal')); editMeeting('${meetingId}')">Edit Meeting</button>
+                    </div>
+                </div>
+            `;
+
+            showModal(modalContent);
         }
 
         // ===================================
