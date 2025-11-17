@@ -439,6 +439,26 @@
             }
         }
 
+        @keyframes highlightPulse {
+            0% {
+                background: var(--bg);
+                box-shadow: 0 0 0 0 var(--primary);
+            }
+            50% {
+                background: var(--primary-light, rgba(59, 130, 246, 0.15));
+                box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.3);
+            }
+            100% {
+                background: var(--bg);
+                box-shadow: 0 0 0 0 var(--primary);
+            }
+        }
+
+        .search-highlight {
+            animation: highlightPulse 2s ease-in-out;
+            scroll-margin-top: 100px;
+        }
+
         .modal-header {
             padding: var(--spacing-lg);
             border-bottom: 1px solid var(--border);
@@ -1654,6 +1674,7 @@
             biomarkers: [],
             theme: 'light',
             currentTab: 'dashboard',
+            highlightItem: null, // { type: 'task|project|meeting|paper|writing', id: 'xxx' }
             pomodoro: {
                 duration: 25 * 60,
                 timeRemaining: 25 * 60,
@@ -1994,6 +2015,9 @@
             // Setup New Task button
             const newTaskBtn = document.getElementById('newTaskBtn');
             newTaskBtn.onclick = () => showTaskModal();
+
+            // Highlight search result if needed
+            highlightSearchResult();
         }
 
         function renderTaskCard(task) {
@@ -2049,6 +2073,51 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        function highlightSearchResult() {
+            if (!appState.highlightItem) return;
+
+            const { type, id } = appState.highlightItem;
+            let selector = '';
+
+            // Find the appropriate element based on type
+            switch(type) {
+                case 'task':
+                    selector = `.task-card[data-task-id="${id}"]`;
+                    break;
+                case 'project':
+                    selector = `.project-card[data-project-id="${id}"]`;
+                    break;
+                case 'meeting':
+                    selector = `.meeting-card[data-meeting-id="${id}"]`;
+                    break;
+                case 'paper':
+                    selector = `.paper-card[data-paper-id="${id}"]`;
+                    break;
+                case 'writing':
+                    selector = `.writing-card[data-writing-id="${id}"]`;
+                    break;
+            }
+
+            if (selector) {
+                // Wait a bit for rendering to complete
+                setTimeout(() => {
+                    const element = document.querySelector(selector);
+                    if (element) {
+                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        element.classList.add('search-highlight');
+
+                        // Remove highlight after animation completes
+                        setTimeout(() => {
+                            element.classList.remove('search-highlight');
+                        }, 2000);
+                    }
+
+                    // Clear the highlight state
+                    appState.highlightItem = null;
+                }, 100);
+            }
         }
 
         function setupDragAndDrop() {
@@ -3213,7 +3282,7 @@
                 }[project.ethicsStatus] || 'neutral';
 
                 html += `
-                    <div class="card">
+                    <div class="card project-card" data-project-id="${project.id}">
                         <div class="card-header">
                             <div>
                                 <h3 class="card-title">${escapeHtml(project.name)}</h3>
@@ -3283,6 +3352,9 @@
             if (newProjectBtn) {
                 newProjectBtn.onclick = () => showProjectModal();
             }
+
+            // Highlight search result if needed
+            highlightSearchResult();
         }
 
         function showProjectModal(projectId = null) {
@@ -3493,7 +3565,7 @@
                     group.papers.forEach(paper => {
                         const stars = '⭐'.repeat(paper.relevance);
                         html += `
-                            <div class="card" style="padding: var(--spacing-md);">
+                            <div class="card paper-card" data-paper-id="${paper.id}" style="padding: var(--spacing-md);">
                                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                                     <div style="flex: 1;">
                                         <h4 style="margin-bottom: 4px; font-size: 15px; font-weight: 600;">${escapeHtml(paper.title)}</h4>
@@ -3536,6 +3608,9 @@
 
             html += '</div>';
             container.innerHTML = html;
+
+            // Highlight search result if needed
+            highlightSearchResult();
         }
 
         function showPaperModal(paperId = null) {
@@ -3760,7 +3835,7 @@
                 const statusColor = statusColors[project.status] || 'neutral';
 
                 html += `
-                    <div class="card">
+                    <div class="card writing-card" data-writing-id="${project.id}">
                         <div class="card-header">
                             <div>
                                 <h3 class="card-title">${escapeHtml(project.title)}</h3>
@@ -3809,6 +3884,9 @@
 
             html += '</div>';
             container.innerHTML = html;
+
+            // Highlight search result if needed
+            highlightSearchResult();
         }
 
         function showWritingProjectModal(projectId = null) {
@@ -3993,7 +4071,7 @@
                 const isPast = meeting.date && new Date(meeting.date) < new Date();
 
                 html += `
-                    <div class="card">
+                    <div class="card meeting-card" data-meeting-id="${meeting.id}">
                         <div class="card-header">
                             <div>
                                 <h3 class="card-title">${escapeHtml(meeting.title)}</h3>
@@ -4071,6 +4149,9 @@
 
             html += '</div>';
             container.innerHTML = html;
+
+            // Highlight search result if needed
+            highlightSearchResult();
         }
 
         function showMeetingModal(meetingId = null) {
@@ -4726,8 +4807,10 @@
                         icon: '📋',
                         title: task.title,
                         subtitle: task.description || '',
+                        id: task.id,
                         action: () => {
                             closeGlobalSearch();
+                            appState.highlightItem = { type: 'task', id: task.id };
                             switchTab('tasks');
                         }
                     });
@@ -4743,8 +4826,10 @@
                         icon: '🔬',
                         title: project.name,
                         subtitle: project.description || '',
+                        id: project.id,
                         action: () => {
                             closeGlobalSearch();
+                            appState.highlightItem = { type: 'project', id: project.id };
                             switchTab('projects');
                         }
                     });
@@ -4762,8 +4847,10 @@
                         icon: '📚',
                         title: paper.title,
                         subtitle: `${paper.authors} (${paper.year})`,
+                        id: paper.id,
                         action: () => {
                             closeGlobalSearch();
+                            appState.highlightItem = { type: 'paper', id: paper.id };
                             switchTab('literature');
                         }
                     });
@@ -4780,8 +4867,10 @@
                         icon: '👥',
                         title: meeting.title,
                         subtitle: meeting.attendees || '',
+                        id: meeting.id,
                         action: () => {
                             closeGlobalSearch();
+                            appState.highlightItem = { type: 'meeting', id: meeting.id };
                             switchTab('meetings');
                         }
                     });
@@ -4797,8 +4886,10 @@
                         icon: '✍️',
                         title: project.title,
                         subtitle: `${project.wordCountCurrent} / ${project.wordCountGoal} words`,
+                        id: project.id,
                         action: () => {
                             closeGlobalSearch();
+                            appState.highlightItem = { type: 'writing', id: project.id };
                             switchTab('writing');
                         }
                     });
