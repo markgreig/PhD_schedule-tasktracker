@@ -4786,6 +4786,14 @@
             modal.style.display = 'none';
         }
 
+        function handleSearchResultClick(type, id, tab) {
+            closeGlobalSearch();
+            if (id) {
+                appState.highlightItem = { type: type.toLowerCase(), id: id };
+            }
+            switchTab(tab);
+        }
+
         function performSearch(query) {
             const searchResults = document.getElementById('searchResults');
 
@@ -4808,11 +4816,7 @@
                         title: task.title,
                         subtitle: task.description || '',
                         id: task.id,
-                        action: () => {
-                            closeGlobalSearch();
-                            appState.highlightItem = { type: 'task', id: task.id };
-                            switchTab('tasks');
-                        }
+                        tab: 'tasks'
                     });
                 }
             });
@@ -4827,11 +4831,7 @@
                         title: project.name,
                         subtitle: project.description || '',
                         id: project.id,
-                        action: () => {
-                            closeGlobalSearch();
-                            appState.highlightItem = { type: 'project', id: project.id };
-                            switchTab('projects');
-                        }
+                        tab: 'projects'
                     });
                 }
             });
@@ -4848,11 +4848,7 @@
                         title: paper.title,
                         subtitle: `${paper.authors} (${paper.year})`,
                         id: paper.id,
-                        action: () => {
-                            closeGlobalSearch();
-                            appState.highlightItem = { type: 'paper', id: paper.id };
-                            switchTab('literature');
-                        }
+                        tab: 'literature'
                     });
                 }
             });
@@ -4868,11 +4864,7 @@
                         title: meeting.title,
                         subtitle: meeting.attendees || '',
                         id: meeting.id,
-                        action: () => {
-                            closeGlobalSearch();
-                            appState.highlightItem = { type: 'meeting', id: meeting.id };
-                            switchTab('meetings');
-                        }
+                        tab: 'meetings'
                     });
                 }
             });
@@ -4887,11 +4879,7 @@
                         title: project.title,
                         subtitle: `${project.wordCountCurrent} / ${project.wordCountGoal} words`,
                         id: project.id,
-                        action: () => {
-                            closeGlobalSearch();
-                            appState.highlightItem = { type: 'writing', id: project.id };
-                            switchTab('writing');
-                        }
+                        tab: 'writing'
                     });
                 }
             });
@@ -4905,10 +4893,8 @@
                         icon: '👥',
                         title: cohort.name,
                         subtitle: cohort.description || '',
-                        action: () => {
-                            closeGlobalSearch();
-                            switchTab('data');
-                        }
+                        id: cohort.id,
+                        tab: 'data'
                     });
                 }
             });
@@ -4928,7 +4914,7 @@
                         <div class="search-result-item" style="padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;"
                              onmouseover="this.style.background='var(--bg-secondary)'"
                              onmouseout="this.style.background='transparent'"
-                             onclick="(${result.action.toString()})()">
+                             onclick="handleSearchResultClick('${result.type}', '${result.id || ''}', '${result.tab}')">
                             <div style="display: flex; align-items: start; gap: 12px;">
                                 <div style="font-size: 24px;">${result.icon}</div>
                                 <div style="flex: 1; min-width: 0;">
