@@ -2476,15 +2476,19 @@
             const current = calendarState.currentDate;
 
             if (direction === 'prev') {
-                if (calendarState.view === 'month') {
+                if (calendarState.view === 'month' || calendarState.view === 'agenda') {
+                    // Navigate by month for month and agenda views
                     calendarState.currentDate = new Date(current.getFullYear(), current.getMonth() - 1, 1);
                 } else {
+                    // Navigate by week for week view
                     calendarState.currentDate = new Date(current.getTime() - 7 * 24 * 60 * 60 * 1000);
                 }
             } else if (direction === 'next') {
-                if (calendarState.view === 'month') {
+                if (calendarState.view === 'month' || calendarState.view === 'agenda') {
+                    // Navigate by month for month and agenda views
                     calendarState.currentDate = new Date(current.getFullYear(), current.getMonth() + 1, 1);
                 } else {
+                    // Navigate by week for week view
                     calendarState.currentDate = new Date(current.getTime() + 7 * 24 * 60 * 60 * 1000);
                 }
             } else if (direction === 'today') {
@@ -2556,26 +2560,73 @@
         }
 
         function renderWeekView() {
-            return `
-                <div class="calendar-week-view">
-                    <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
-                        <div style="font-size: 48px; margin-bottom: 16px;">📅</div>
-                        <div>Week view coming soon</div>
-                        <div style="font-size: 13px; margin-top: 8px;">Use Month or Agenda view for now</div>
-                    </div>
-                </div>
-            `;
+            const current = calendarState.currentDate;
+
+            // Get the start of the week (Sunday)
+            const startOfWeek = new Date(current);
+            startOfWeek.setDate(current.getDate() - current.getDay());
+            startOfWeek.setHours(0, 0, 0, 0);
+
+            const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            let html = '<div class="calendar-week-view" style="display: grid; gap: 16px;">';
+
+            for (let i = 0; i < 7; i++) {
+                const dayDate = new Date(startOfWeek);
+                dayDate.setDate(startOfWeek.getDate() + i);
+                const isToday = dayDate.getTime() === today.getTime();
+                const dateStr = dayDate.toISOString().split('T')[0];
+                const dayEvents = getAllEventsForDate(dateStr);
+
+                html += `
+                    <div class="card" style="padding: 16px; ${isToday ? 'border: 2px solid var(--primary); background: var(--bg-primary);' : ''}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+                            <div>
+                                <div style="font-weight: 600; font-size: 14px; color: ${isToday ? 'var(--primary)' : 'var(--text-primary)'};">${weekdays[i]}</div>
+                                <div style="font-size: 24px; font-weight: 600; color: ${isToday ? 'var(--primary)' : 'var(--text-primary)'};">${dayDate.getDate()}</div>
+                            </div>
+                            ${dayEvents.length > 0 ? `<span class="tag tag-medium">${dayEvents.length} event${dayEvents.length > 1 ? 's' : ''}</span>` : ''}
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                `;
+
+                if (dayEvents.length === 0) {
+                    html += '<div style="text-align: center; padding: 20px; color: var(--text-secondary); font-size: 13px;">No events</div>';
+                } else {
+                    dayEvents.forEach(event => {
+                        const eventColor = event.type === 'task' ? 'high' : event.type === 'meeting' ? 'medium' : 'low';
+                        html += `
+                            <div style="padding: 8px; background: var(--bg-secondary); border-radius: var(--radius-sm); border-left: 3px solid var(--${eventColor === 'high' ? 'error' : eventColor === 'medium' ? 'warning' : 'success'});">
+                                <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 2px;">${escapeHtml(event.typeLabel)}</div>
+                                <div style="font-size: 13px; font-weight: 500;">${escapeHtml(event.title)}</div>
+                            </div>
+                        `;
+                    });
+                }
+
+                html += '</div></div>';
+            }
+
+            html += '</div>';
+            return html;
         }
 
         function renderAgendaView() {
-            const today = new Date();
-            const nextMonth = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+            // Use calendarState.currentDate to determine which month to show
+            const year = calendarState.currentDate.getFullYear();
+            const month = calendarState.currentDate.getMonth();
 
-            // Get all events from today to next 30 days
+            // Get first and last day of the current month
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+
+            // Get all events for the entire month
             const allEvents = [];
-            let currentDate = new Date(today);
+            let currentDate = new Date(firstDay);
 
-            while (currentDate <= nextMonth) {
+            while (currentDate <= lastDay) {
                 const dateStr = currentDate.toISOString().split('T')[0];
                 const dayEvents = getAllEventsForDate(dateStr);
 
@@ -2590,11 +2641,13 @@
             }
 
             if (allEvents.length === 0) {
+                const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                                   'July', 'August', 'September', 'October', 'November', 'December'];
                 return `
                     <div class="calendar-agenda-view">
                         <div style="text-align: center; padding: 40px; color: var(--text-secondary);">
                             <div style="font-size: 48px; margin-bottom: 16px;">📋</div>
-                            <div>No upcoming events</div>
+                            <div>No events in ${monthNames[month]} ${year}</div>
                             <div style="font-size: 13px; margin-top: 8px;">Tasks and meetings with deadlines will appear here</div>
                         </div>
                     </div>
