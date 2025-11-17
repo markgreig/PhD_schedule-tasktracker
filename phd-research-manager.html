@@ -1644,6 +1644,7 @@
             projects: [],
             papers: [],
             meetings: [],
+            meetingTemplates: [],
             writingProjects: [],
             calendarEvents: [],
             goals: [],
@@ -3647,6 +3648,8 @@
                 title: meetingData.title || 'Untitled Meeting',
                 date: meetingData.date || null,
                 attendees: meetingData.attendees || '',
+                location: meetingData.location || '',
+                teamsUrl: meetingData.teamsUrl || '',
                 agenda: meetingData.agenda || '',
                 notes: meetingData.notes || '',
                 actionItems: meetingData.actionItems || [],
@@ -3725,6 +3728,9 @@
                                 ` : ''}
                             </div>
                             <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-sm btn-primary" onclick="sendMeetingInvite('${meeting.id}')" title="Send Email Invite">
+                                    📧 Send Invite
+                                </button>
                                 <button class="btn btn-sm btn-outline" onclick="editMeeting('${meeting.id}')">✏️ Edit</button>
                                 <button class="btn btn-sm btn-outline" onclick="confirmDeleteMeeting('${meeting.id}')">🗑️</button>
                             </div>
@@ -3732,14 +3738,32 @@
                         <div class="card-body">
                             ${meeting.attendees ? `
                                 <div style="margin-bottom: 12px;">
-                                    <strong style="font-size: 13px;">Attendees:</strong>
+                                    <strong style="font-size: 13px;">👥 Attendees:</strong>
                                     <div style="font-size: 13px; color: var(--text-secondary);">${escapeHtml(meeting.attendees)}</div>
+                                </div>
+                            ` : ''}
+
+                            ${meeting.location ? `
+                                <div style="margin-bottom: 12px;">
+                                    <strong style="font-size: 13px;">📍 Location:</strong>
+                                    <div style="font-size: 13px; color: var(--text-secondary);">${escapeHtml(meeting.location)}</div>
+                                </div>
+                            ` : ''}
+
+                            ${meeting.teamsUrl ? `
+                                <div style="margin-bottom: 12px;">
+                                    <strong style="font-size: 13px;">💻 Online Meeting:</strong>
+                                    <div style="font-size: 13px;">
+                                        <a href="${escapeHtml(meeting.teamsUrl)}" target="_blank" style="color: var(--primary); text-decoration: none;">
+                                            Join Meeting ↗
+                                        </a>
+                                    </div>
                                 </div>
                             ` : ''}
 
                             ${meeting.agenda ? `
                                 <div style="margin-bottom: 12px;">
-                                    <strong style="font-size: 13px;">Agenda:</strong>
+                                    <strong style="font-size: 13px;">📋 Agenda:</strong>
                                     <div style="font-size: 13px; white-space: pre-wrap; color: var(--text-secondary); margin-top: 4px;">${escapeHtml(meeting.agenda)}</div>
                                 </div>
                             ` : ''}
@@ -3777,6 +3801,12 @@
             const meeting = meetingId ? appState.meetings.find(m => m.id === meetingId) : null;
             const isEdit = !!meeting;
 
+            // Build template options
+            let templateOptions = '<option value="">-- No Template --</option>';
+            appState.meetingTemplates.forEach(template => {
+                templateOptions += `<option value="${template.id}">${escapeHtml(template.name)}</option>`;
+            });
+
             const modalContent = `
                 <div class="modal-content modal-lg">
                     <div class="modal-header">
@@ -3785,26 +3815,56 @@
                     </div>
                     <div class="modal-body">
                         <form id="meetingForm" onsubmit="saveMeetingForm(event, ${isEdit ? `'${meetingId}'` : 'null'})">
+                            ${!isEdit ? `
+                            <div class="form-group">
+                                <label class="form-label">Use Template</label>
+                                <select class="form-select" id="meetingTemplateSelect" onchange="loadMeetingTemplate(this.value)">
+                                    ${templateOptions}
+                                </select>
+                            </div>
+                            ` : ''}
                             <div class="form-group">
                                 <label class="form-label">Title *</label>
-                                <input type="text" class="form-input" name="title" value="${meeting ? escapeHtml(meeting.title) : ''}" required placeholder="Supervisor Meeting">
+                                <input type="text" class="form-input" id="meetingTitle" name="title" value="${meeting ? escapeHtml(meeting.title) : ''}" required placeholder="Weekly Supervision Meeting">
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Date & Time</label>
-                                <input type="datetime-local" class="form-input" name="date" value="${meeting?.date ? meeting.date.substring(0, 16) : ''}">
+                                <input type="datetime-local" class="form-input" id="meetingDate" name="date" value="${meeting?.date ? meeting.date.substring(0, 16) : ''}">
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div class="form-group">
+                                    <label class="form-label">Attendees</label>
+                                    <input type="text" class="form-input" id="meetingAttendees" name="attendees" value="${meeting ? escapeHtml(meeting.attendees) : ''}" placeholder="Dr. Smith, Dr. Jones">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Location</label>
+                                    <input type="text" class="form-input" id="meetingLocation" name="location" value="${meeting?.location || ''}" placeholder="Room 301 or Online">
+                                </div>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Attendees</label>
-                                <input type="text" class="form-input" name="attendees" value="${meeting ? escapeHtml(meeting.attendees) : ''}" placeholder="Dr. Smith, Dr. Jones">
+                                <label class="form-label">Microsoft Teams / Zoom URL</label>
+                                <input type="url" class="form-input" id="meetingTeamsUrl" name="teamsUrl" value="${meeting?.teamsUrl || ''}" placeholder="https://teams.microsoft.com/l/meetup-join/...">
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Agenda</label>
-                                <textarea class="form-textarea" name="agenda" placeholder="1. Review progress&#10;2. Discuss results&#10;3. Plan next steps">${meeting?.agenda || ''}</textarea>
+                                <textarea class="form-textarea" id="meetingAgenda" name="agenda" placeholder="1. Review progress&#10;2. Discuss results&#10;3. Plan next steps">${meeting?.agenda || ''}</textarea>
                             </div>
                             <div class="form-group">
                                 <label class="form-label">Meeting Notes</label>
                                 <textarea class="form-textarea" name="notes" style="min-height: 150px;">${meeting?.notes || ''}</textarea>
                             </div>
+                            ${!isEdit ? `
+                            <div class="form-group">
+                                <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                    <input type="checkbox" name="saveAsTemplate" id="saveAsTemplate">
+                                    <span>Save as template for future meetings</span>
+                                </label>
+                            </div>
+                            <div class="form-group" id="templateNameGroup" style="display: none;">
+                                <label class="form-label">Template Name</label>
+                                <input type="text" class="form-input" id="templateName" name="templateName" placeholder="e.g., Weekly Supervision">
+                            </div>
+                            ` : ''}
                         </form>
                     </div>
                     <div class="modal-footer">
@@ -3817,6 +3877,17 @@
             `;
 
             showModal(modalContent);
+
+            // Setup template checkbox behavior
+            if (!isEdit) {
+                const saveAsTemplateCheckbox = document.getElementById('saveAsTemplate');
+                const templateNameGroup = document.getElementById('templateNameGroup');
+                if (saveAsTemplateCheckbox && templateNameGroup) {
+                    saveAsTemplateCheckbox.onchange = () => {
+                        templateNameGroup.style.display = saveAsTemplateCheckbox.checked ? 'block' : 'none';
+                    };
+                }
+            }
         }
 
         function saveMeetingForm(e, meetingId) {
@@ -3826,6 +3897,8 @@
                 title: formData.get('title'),
                 date: formData.get('date') || null,
                 attendees: formData.get('attendees'),
+                location: formData.get('location'),
+                teamsUrl: formData.get('teamsUrl'),
                 agenda: formData.get('agenda'),
                 notes: formData.get('notes'),
                 actionItems: [] // Can be enhanced later
@@ -3835,8 +3908,27 @@
                 updateMeeting(meetingId, meetingData);
                 showToast('Meeting updated', 'success');
             } else {
-                createMeeting(meetingData);
-                showToast('Meeting created', 'success');
+                const newMeeting = createMeeting(meetingData);
+
+                // Save as template if checkbox is checked
+                const saveAsTemplate = formData.get('saveAsTemplate');
+                if (saveAsTemplate) {
+                    const templateName = formData.get('templateName');
+                    if (templateName) {
+                        saveMeetingTemplate({
+                            name: templateName,
+                            attendees: meetingData.attendees,
+                            location: meetingData.location,
+                            teamsUrl: meetingData.teamsUrl,
+                            agenda: meetingData.agenda
+                        });
+                        showToast(`Meeting created and saved as template "${templateName}"`, 'success');
+                    } else {
+                        showToast('Meeting created', 'success');
+                    }
+                } else {
+                    showToast('Meeting created', 'success');
+                }
             }
 
             closeModal(e.target.closest('.modal'));
@@ -3853,6 +3945,94 @@
                 renderMeetings();
                 showToast('Meeting deleted', 'success');
             }
+        }
+
+        // Meeting Templates
+        function saveMeetingTemplate(templateData) {
+            const template = {
+                id: generateId(),
+                name: templateData.name,
+                attendees: templateData.attendees || '',
+                location: templateData.location || '',
+                teamsUrl: templateData.teamsUrl || '',
+                agenda: templateData.agenda || ''
+            };
+            appState.meetingTemplates.push(template);
+            saveState();
+            return template;
+        }
+
+        function loadMeetingTemplate(templateId) {
+            if (!templateId) return;
+
+            const template = appState.meetingTemplates.find(t => t.id === templateId);
+            if (!template) return;
+
+            // Fill in form fields with template data
+            document.getElementById('meetingAttendees').value = template.attendees || '';
+            document.getElementById('meetingLocation').value = template.location || '';
+            document.getElementById('meetingTeamsUrl').value = template.teamsUrl || '';
+            document.getElementById('meetingAgenda').value = template.agenda || '';
+
+            // Optionally pre-fill title if template name is descriptive
+            if (!document.getElementById('meetingTitle').value) {
+                document.getElementById('meetingTitle').value = template.name;
+            }
+        }
+
+        function sendMeetingInvite(meetingId) {
+            const meeting = appState.meetings.find(m => m.id === meetingId);
+            if (!meeting) return;
+
+            // Format date/time
+            let dateTimeText = 'TBD';
+            if (meeting.date) {
+                const meetingDate = new Date(meeting.date);
+                dateTimeText = meetingDate.toLocaleString('en-GB', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
+
+            // Build email subject
+            const subject = encodeURIComponent(`Meeting Invite: ${meeting.title}`);
+
+            // Build email body
+            let bodyText = `You are invited to the following meeting:\n\n`;
+            bodyText += `Title: ${meeting.title}\n`;
+            bodyText += `Date & Time: ${dateTimeText}\n\n`;
+
+            if (meeting.location) {
+                bodyText += `Location: ${meeting.location}\n`;
+            }
+
+            if (meeting.teamsUrl) {
+                bodyText += `\nJoin Online:\n${meeting.teamsUrl}\n`;
+            }
+
+            if (meeting.attendees) {
+                bodyText += `\nAttendees: ${meeting.attendees}\n`;
+            }
+
+            if (meeting.agenda) {
+                bodyText += `\n--- AGENDA ---\n${meeting.agenda}\n`;
+            }
+
+            bodyText += `\n\n---\nThis invitation was created using PhD Research Manager`;
+
+            const body = encodeURIComponent(bodyText);
+
+            // Create mailto link
+            const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+
+            // Open default email client
+            window.location.href = mailtoLink;
+
+            showToast('Opening email client...', 'info');
         }
 
         // ===================================
