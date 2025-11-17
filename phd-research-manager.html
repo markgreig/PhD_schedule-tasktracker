@@ -1859,10 +1859,26 @@
                 closeBtn.addEventListener('click', () => closeModal(modal));
             }
 
+            // Close on Escape key
+            const escapeHandler = (e) => {
+                if (e.key === 'Escape' || e.key === 'Esc') {
+                    closeModal(modal);
+                }
+            };
+            document.addEventListener('keydown', escapeHandler);
+
+            // Store the handler on the modal element so we can remove it later
+            modal._escapeHandler = escapeHandler;
+
             return modal;
         }
 
         function closeModal(modal) {
+            // Remove the escape key listener
+            if (modal._escapeHandler) {
+                document.removeEventListener('keydown', modal._escapeHandler);
+            }
+
             modal.style.animation = 'modalSlideIn 0.3s ease reverse';
             setTimeout(() => modal.remove(), 300);
         }
