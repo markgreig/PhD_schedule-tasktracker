@@ -634,6 +634,31 @@
         }
 
         /* ===================================
+           GLOBAL SEARCH
+        =================================== */
+        .search-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 16px;
+            background: var(--surface);
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .search-results {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: var(--radius);
+        }
+
+        /* ===================================
            POMODORO WIDGET
         =================================== */
         .pomodoro-widget {
@@ -3979,6 +4004,14 @@
             // Global search
             document.getElementById('searchBtn').addEventListener('click', openGlobalSearch);
 
+            // Pomodoro timer
+            document.getElementById('pomodoroBtn').addEventListener('click', togglePomodoroWidget);
+            document.getElementById('pomodoroStart').addEventListener('click', togglePomodoroTimer);
+            document.getElementById('pomodoroReset').addEventListener('click', resetPomodoroTimer);
+            document.querySelector('#pomodoroWidget .close-widget').addEventListener('click', () => {
+                document.getElementById('pomodoroWidget').style.display = 'none';
+            });
+
             // Keyboard shortcuts
             document.addEventListener('keydown', handleKeyboardShortcuts);
         }
@@ -4000,9 +4033,316 @@
             }
         }
 
+        // ===================================
+        // GLOBAL SEARCH
+        // ===================================
         function openGlobalSearch() {
-            // Part 13
-            showToast('Global search will be implemented in Part 13', 'info');
+            const modal = document.getElementById('searchModal');
+            const searchInput = document.getElementById('globalSearchInput');
+            const searchResults = document.getElementById('searchResults');
+
+            modal.style.display = 'flex';
+            searchInput.value = '';
+            searchResults.innerHTML = '';
+
+            // Focus on search input
+            setTimeout(() => searchInput.focus(), 100);
+
+            // Setup event listeners
+            const closeBtn = modal.querySelector('.modal-close');
+            closeBtn.onclick = () => closeGlobalSearch();
+
+            modal.onclick = (e) => {
+                if (e.target === modal) closeGlobalSearch();
+            };
+
+            searchInput.oninput = (e) => performSearch(e.target.value);
+        }
+
+        function closeGlobalSearch() {
+            const modal = document.getElementById('searchModal');
+            modal.style.display = 'none';
+        }
+
+        function performSearch(query) {
+            const searchResults = document.getElementById('searchResults');
+
+            if (!query || query.trim().length < 2) {
+                searchResults.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Type at least 2 characters to search...</div>';
+                return;
+            }
+
+            const q = query.toLowerCase();
+            const results = [];
+
+            // Search tasks
+            appState.tasks.forEach(task => {
+                if (task.title.toLowerCase().includes(q) ||
+                    task.description?.toLowerCase().includes(q) ||
+                    task.tags?.some(tag => tag.toLowerCase().includes(q))) {
+                    results.push({
+                        type: 'Task',
+                        icon: '📋',
+                        title: task.title,
+                        subtitle: task.description || '',
+                        action: () => {
+                            closeGlobalSearch();
+                            switchTab('tasks');
+                        }
+                    });
+                }
+            });
+
+            // Search projects
+            appState.projects.forEach(project => {
+                if (project.name.toLowerCase().includes(q) ||
+                    project.description?.toLowerCase().includes(q)) {
+                    results.push({
+                        type: 'Project',
+                        icon: '🔬',
+                        title: project.name,
+                        subtitle: project.description || '',
+                        action: () => {
+                            closeGlobalSearch();
+                            switchTab('projects');
+                        }
+                    });
+                }
+            });
+
+            // Search papers
+            appState.papers.forEach(paper => {
+                if (paper.title.toLowerCase().includes(q) ||
+                    paper.authors?.toLowerCase().includes(q) ||
+                    paper.journal?.toLowerCase().includes(q) ||
+                    paper.tags?.some(tag => tag.toLowerCase().includes(q))) {
+                    results.push({
+                        type: 'Paper',
+                        icon: '📚',
+                        title: paper.title,
+                        subtitle: `${paper.authors} (${paper.year})`,
+                        action: () => {
+                            closeGlobalSearch();
+                            switchTab('literature');
+                        }
+                    });
+                }
+            });
+
+            // Search meetings
+            appState.meetings.forEach(meeting => {
+                if (meeting.title.toLowerCase().includes(q) ||
+                    meeting.attendees?.toLowerCase().includes(q) ||
+                    meeting.agenda?.toLowerCase().includes(q)) {
+                    results.push({
+                        type: 'Meeting',
+                        icon: '👥',
+                        title: meeting.title,
+                        subtitle: meeting.attendees || '',
+                        action: () => {
+                            closeGlobalSearch();
+                            switchTab('meetings');
+                        }
+                    });
+                }
+            });
+
+            // Search writing projects
+            appState.writingProjects.forEach(project => {
+                if (project.title.toLowerCase().includes(q) ||
+                    project.notes?.toLowerCase().includes(q)) {
+                    results.push({
+                        type: 'Writing',
+                        icon: '✍️',
+                        title: project.title,
+                        subtitle: `${project.wordCountCurrent} / ${project.wordCountGoal} words`,
+                        action: () => {
+                            closeGlobalSearch();
+                            switchTab('writing');
+                        }
+                    });
+                }
+            });
+
+            // Search cohorts
+            appState.cohorts.forEach(cohort => {
+                if (cohort.name.toLowerCase().includes(q) ||
+                    cohort.description?.toLowerCase().includes(q)) {
+                    results.push({
+                        type: 'Cohort',
+                        icon: '👥',
+                        title: cohort.name,
+                        subtitle: cohort.description || '',
+                        action: () => {
+                            closeGlobalSearch();
+                            switchTab('data');
+                        }
+                    });
+                }
+            });
+
+            // Display results
+            if (results.length === 0) {
+                searchResults.innerHTML = `
+                    <div style="padding: 40px; text-align: center; color: var(--text-secondary);">
+                        <div style="font-size: 48px; margin-bottom: 12px;">🔍</div>
+                        <div>No results found for "${escapeHtml(query)}"</div>
+                    </div>
+                `;
+            } else {
+                let html = `<div style="padding: 12px 0;">`;
+                results.forEach(result => {
+                    html += `
+                        <div class="search-result-item" style="padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s;"
+                             onmouseover="this.style.background='var(--bg-secondary)'"
+                             onmouseout="this.style.background='transparent'"
+                             onclick="(${result.action.toString()})()">
+                            <div style="display: flex; align-items: start; gap: 12px;">
+                                <div style="font-size: 24px;">${result.icon}</div>
+                                <div style="flex: 1; min-width: 0;">
+                                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                                        <span style="font-size: 11px; padding: 2px 6px; background: var(--bg-secondary); border-radius: 3px; color: var(--text-secondary); text-transform: uppercase;">${result.type}</span>
+                                        <span style="font-weight: 500; font-size: 14px;">${escapeHtml(result.title)}</span>
+                                    </div>
+                                    ${result.subtitle ? `<div style="font-size: 13px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(result.subtitle)}</div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+                searchResults.innerHTML = html;
+            }
+        }
+
+        // ===================================
+        // POMODORO TIMER
+        // ===================================
+        let pomodoroInterval = null;
+
+        function togglePomodoroWidget() {
+            const widget = document.getElementById('pomodoroWidget');
+            const isVisible = widget.style.display !== 'none';
+
+            if (isVisible) {
+                widget.style.display = 'none';
+            } else {
+                widget.style.display = 'block';
+                updatePomodoroTaskList();
+                updatePomodoroDisplay();
+            }
+        }
+
+        function updatePomodoroTaskList() {
+            const select = document.getElementById('pomodoroTaskSelect');
+            const currentValue = select.value;
+
+            select.innerHTML = '<option value="">Select task...</option>';
+
+            // Add incomplete tasks
+            appState.tasks
+                .filter(t => t.status !== 'completed')
+                .forEach(task => {
+                    const option = document.createElement('option');
+                    option.value = task.id;
+                    option.textContent = task.title;
+                    if (task.id === appState.pomodoro.currentTaskId) {
+                        option.selected = true;
+                    }
+                    select.appendChild(option);
+                });
+
+            // Restore previous selection if still valid
+            if (currentValue && select.querySelector(`option[value="${currentValue}"]`)) {
+                select.value = currentValue;
+            }
+        }
+
+        function updatePomodoroDisplay() {
+            const minutes = Math.floor(appState.pomodoro.timeRemaining / 60);
+            const seconds = appState.pomodoro.timeRemaining % 60;
+            const display = document.querySelector('.timer-display');
+            const startBtn = document.getElementById('pomodoroStart');
+
+            display.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            startBtn.textContent = appState.pomodoro.isRunning ? 'Pause' : 'Start';
+
+            // Change color when time is running out
+            if (appState.pomodoro.timeRemaining < 60) {
+                display.style.color = 'var(--error)';
+            } else if (appState.pomodoro.timeRemaining < 300) {
+                display.style.color = 'var(--warning)';
+            } else {
+                display.style.color = 'var(--primary)';
+            }
+        }
+
+        function togglePomodoroTimer() {
+            if (appState.pomodoro.isRunning) {
+                // Pause
+                appState.pomodoro.isRunning = false;
+                if (pomodoroInterval) {
+                    clearInterval(pomodoroInterval);
+                    pomodoroInterval = null;
+                }
+            } else {
+                // Start
+                appState.pomodoro.isRunning = true;
+                const taskSelect = document.getElementById('pomodoroTaskSelect');
+                appState.pomodoro.currentTaskId = taskSelect.value || null;
+
+                pomodoroInterval = setInterval(() => {
+                    if (appState.pomodoro.timeRemaining > 0) {
+                        appState.pomodoro.timeRemaining--;
+                        updatePomodoroDisplay();
+                        saveState();
+                    } else {
+                        // Timer completed
+                        completePomodoroSession();
+                    }
+                }, 1000);
+            }
+
+            updatePomodoroDisplay();
+            saveState();
+        }
+
+        function resetPomodoroTimer() {
+            if (pomodoroInterval) {
+                clearInterval(pomodoroInterval);
+                pomodoroInterval = null;
+            }
+
+            appState.pomodoro.isRunning = false;
+            appState.pomodoro.timeRemaining = appState.pomodoro.duration;
+            appState.pomodoro.currentTaskId = null;
+
+            updatePomodoroDisplay();
+            document.getElementById('pomodoroTaskSelect').value = '';
+            saveState();
+        }
+
+        function completePomodoroSession() {
+            if (pomodoroInterval) {
+                clearInterval(pomodoroInterval);
+                pomodoroInterval = null;
+            }
+
+            appState.pomodoro.isRunning = false;
+
+            // Show completion notification
+            showToast('🎉 Pomodoro session completed! Time for a break.', 'success');
+
+            // Play notification sound (if browser allows)
+            try {
+                const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIF2m98OScTgwOUKnl8LNkHQU2jdXwyXksBSN0yPDdkj8JFF+z6+uoVRQLR6Hf8rtqIQUsgs/y2oo2CBdpvvDpnE4MDlGp5fCzZB0FNo3V8Ml5LAUjdMjw3ZI/CRRfs+vrqFUVC0ah3/K8aiEFLILP8tqKNggXab7w6ZxODA5RqeXws2QdBTaN1fDJeSwFI3TI8N2SPwkUX7Pr66hVFQtGod/yvGohBSyCz/LaijYIF2m+8OmcTgwOUanl8LNkHQU2jdXwyXksBSN0yPDdkj8JFF+z6+uoVRULRqHf8rxqIQUsgs/y2oo2CBdpvvDpnE4MDlGp5fCzZB0FNo3V8Ml5LAUjdMjw3ZI/CRRfs+vrqFUVC0ah3/K8aiEFLILP8tqKNggXab7w6ZxODA5RqeXws2QdBTaN1fDJeSwFI3TI8N2SPwkUX7Pr66hVFQtGod/yvGohBSyCz/LaijYIF2m+8OmcTgwOUanl8LNkHQU2jdXwyXksBSN0yPDdkj8JFF+z6+uoVRULRqHf8rxqIQUsgs/y2oo2CBdpvvDpnE4MDlGp5fCzZB0FNo3V8Ml5LAUjdMjw3ZI/CRRfs+vrqFUVC0ah3/K8aiEFLILP8tqKNggXab7w6ZxODA5RqeXws2QdBTaN1fDJeSwFI3TI8N2SPwkUX7Pr66hVFQtGod/yvGohBSyCz/LaijYIF2m+8OmcTgwOUanl8LNkHQU2jdXwyXksBSN0yPDdkj8JFF+z6+uoVRULRqHf8rxqIQUsgs/y2oo2CBdpvvDpnE4MDlGp5fCzZB0FNo3V8Ml5LAUjdMjw3ZI/CRRfs+vrqFUVC0ah3/K8aiEFLILP8tqKNggXab7w6ZxODA5RqeXws2QdBTaN1fDJeSwFI3TI8N2SPwkUX7Pr66hVFQtGod/yvGohBSyCz/LaijYIF2m+8OmcTgwOUanl8LNkHQU2jdXwyXksBSN0yPDdkj8JFF+z6+uoVRULRqHf8rxqIQUsgs/y2oo2CBdpvvDpnE4MDlGp5fCzZB0FNo3V8Ml5LAUjdMjw3ZI/CRRfs+vrqFUVC0ah3/K8aiEFLILP8tqKNggXab7w');
+                audio.play().catch(() => {});
+            } catch (e) {}
+
+            // Reset timer
+            appState.pomodoro.timeRemaining = appState.pomodoro.duration;
+            updatePomodoroDisplay();
+            saveState();
         }
 
         // ===================================
@@ -4026,8 +4366,54 @@
         }
 
         function exportToCSV() {
-            // Part 14
-            showToast('CSV export will be implemented in Part 14', 'info');
+            if (appState.tasks.length === 0) {
+                showToast('No tasks to export', 'warning');
+                return;
+            }
+
+            // CSV headers
+            const headers = ['Title', 'Description', 'Status', 'Priority', 'Deadline', 'Tags', 'Estimated Time (hours)', 'Project'];
+
+            // CSV rows
+            const rows = appState.tasks.map(task => {
+                const project = task.projectId ? appState.projects.find(p => p.id === task.projectId) : null;
+                return [
+                    task.title,
+                    task.description || '',
+                    task.status,
+                    task.priority,
+                    task.deadline || '',
+                    task.tags?.join('; ') || '',
+                    task.estimatedTime || '',
+                    project?.name || ''
+                ];
+            });
+
+            // Escape CSV values
+            const escapeCSV = (value) => {
+                const str = String(value);
+                if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+                    return `"${str.replace(/"/g, '""')}"`;
+                }
+                return str;
+            };
+
+            // Build CSV content
+            const csvContent = [
+                headers.map(escapeCSV).join(','),
+                ...rows.map(row => row.map(escapeCSV).join(','))
+            ].join('\n');
+
+            // Download CSV
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `phd-tasks-export-${new Date().toISOString().split('T')[0]}.csv`;
+            link.click();
+            URL.revokeObjectURL(url);
+
+            showToast('Tasks exported to CSV', 'success');
         }
 
         // ===================================
